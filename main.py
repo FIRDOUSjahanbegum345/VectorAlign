@@ -14,7 +14,7 @@ from services.scorer import calculate_ats_score
 from services.ai_feedback import generate_feedback
 from services.resume_generator import create_optimized_resume
 
-from database import DB_FILE, init_db
+from .database import DB_FILE, init_db
 
 # ---------------- INIT DB ----------------
 init_db()
