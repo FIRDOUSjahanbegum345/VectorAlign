@@ -16,7 +16,7 @@ from services.resume_generator import create_optimized_resume
 from services.database import DB_FILE, init_db
 
 # ---------------- INIT DB ----------------
-# This will create tables for 'users' and 'scans' if they don't exist
+# Ensures tables are created on startup
 init_db()
 
 app = FastAPI(title="VectorAlign AI - Core Optimization Engine", version="2.0.0")
@@ -113,11 +113,19 @@ async def analyze_resume(
             file_id=file_id
         )
 
-        # ---------------- SAVE SCAN TO DB ----------------
+        # ---------------- SAVE SCAN TO DB (WITH SAFETY CHECK) ----------------
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
 
-            # Note: This expects the 'scans' table to exist
+            # Ensure table exists in case the DB file was already present
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    ats_score FLOAT NOT NULL
+                )
+            """)
+
             cursor.execute(
                 "INSERT INTO scans (user_id, ats_score) VALUES (?, ?)",
                 (user_id, ats_score)
