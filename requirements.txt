@@ -8,3 +8,4 @@ bcrypt==4.1.2
 google-genai==2.9.0
 scikit-learn
 pandas
+sqlalchemy
