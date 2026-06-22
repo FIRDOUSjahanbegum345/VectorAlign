@@ -1,4 +1,3 @@
-
 import os
 import uuid
 import sqlite3
@@ -17,6 +16,7 @@ from services.resume_generator import create_optimized_resume
 from services.database import DB_FILE, init_db
 
 # ---------------- INIT DB ----------------
+# This will create tables for 'users' and 'scans' if they don't exist
 init_db()
 
 app = FastAPI(title="VectorAlign AI - Core Optimization Engine", version="2.0.0")
@@ -82,12 +82,12 @@ async def login(user: UserAuth):
     return {"status": "success", "username": user.username}
 
 
-# ---------------- RESUME ANALYZE (MAIN FIX HERE) ----------------
+# ---------------- RESUME ANALYZE ----------------
 @app.post("/api/v1/resume/analyze")
 async def analyze_resume(
     resume: UploadFile = File(...),
     job_description: str = Form(...),
-    user_id: str = Form(...)   # ✅ REQUIRED FOR SCANS
+    user_id: str = Form(...)
 ):
     file_id = str(uuid.uuid4())
     extension = resume.filename.split(".")[-1].lower()
@@ -117,6 +117,7 @@ async def analyze_resume(
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
 
+            # Note: This expects the 'scans' table to exist
             cursor.execute(
                 "INSERT INTO scans (user_id, ats_score) VALUES (?, ?)",
                 (user_id, ats_score)
@@ -130,16 +131,12 @@ async def analyze_resume(
 
             conn.commit()
 
-        # ---------------- RESPONSE TO FRONTEND ----------------
         return {
             "file_id": file_id,
             "ats_score": ats_score,
-
-            # 🔥 DASHBOARD METRICS (NOW WORKING)
             "total_scans": total_scans,
             "mean_vector_match": round(ats_score * 3, 2),
             "system_peak_match": round(ats_score * 4, 2),
-
             "feedback": feedback_matrix,
             "download_url": f"/api/v1/resume/download/{file_id}"
         }
@@ -165,6 +162,5 @@ async def download_resume(file_id: str):
 # ---------------- RENDER ENTRYPOINT ----------------
 if __name__ == "__main__":
     import uvicorn
-    import os
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
