@@ -16,10 +16,9 @@ from services.resume_generator import create_optimized_resume
 from services.database import DB_FILE, init_db
 
 # ---------------- INIT DB ----------------
-# Ensures tables are created on startup
 init_db()
 
-app = FastAPI(title="VectorAlign AI - Core Optimization Engine", version="2.0.0")
+app = FastAPI(title="VectorAlign AI - Core Optimization Engine", version="3.0.0")
 
 # ---------------- CORS ----------------
 app.add_middleware(
@@ -82,7 +81,7 @@ async def login(user: UserAuth):
     return {"status": "success", "username": user.username}
 
 
-# ---------------- RESUME ANALYZE ----------------
+# ---------------- RESUME ANALYZE (UPGRADED CORE) ----------------
 @app.post("/api/v1/resume/analyze")
 async def analyze_resume(
     resume: UploadFile = File(...),
@@ -103,21 +102,26 @@ async def analyze_resume(
     try:
         # ---------------- PIPELINE ----------------
         resume_text = extract_resume_text(file_path, extension)
-        ats_score = calculate_ats_score(resume_text, job_description)
-        feedback_matrix = generate_feedback(resume_text, job_description, ats_score)
 
-        # ---------------- SAVE OPTIMIZED DOC ----------------
-        create_optimized_resume(
-            optimized_content=feedback_matrix["tailored_summary_suggestion"],
-            feedback=feedback_matrix["ats_score_evaluation"],
+        ats_score = calculate_ats_score(resume_text, job_description)
+
+        feedback_matrix = generate_feedback(
+            resume_text,
+            job_description,
+            ats_score
+        )
+
+        # ---------------- GENERATE DOCX + PDF ----------------
+        files = create_optimized_resume(
+            optimized_content=feedback_matrix.get("optimized_resume", ""),
+            feedback=feedback_matrix,
             file_id=file_id
         )
 
-        # ---------------- SAVE SCAN TO DB (WITH SAFETY CHECK) ----------------
+        # ---------------- DB SAVE ----------------
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
 
-            # Ensure table exists in case the DB file was already present
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS scans (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,21 +143,30 @@ async def analyze_resume(
 
             conn.commit()
 
+        # ---------------- RESPONSE (BACKWARD SAFE + UPGRADED) ----------------
         return {
             "file_id": file_id,
+
+            # old frontend fields (DO NOT REMOVE)
             "ats_score": ats_score,
             "total_scans": total_scans,
             "mean_vector_match": round(ats_score * 3, 2),
             "system_peak_match": round(ats_score * 4, 2),
             "feedback": feedback_matrix,
-            "download_url": f"/api/v1/resume/download/{file_id}"
+            "download_url": f"/api/v1/resume/download/{file_id}",
+
+            # NEW upgraded fields
+            "download_docx": files["docx_path"],
+            "download_pdf": files["pdf_path"],
+            "keyword_match_score": feedback_matrix.get("keyword_match_score", 0),
+            "job_match_score": feedback_matrix.get("job_match_score", 0)
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------------- DOWNLOAD ----------------
+# ---------------- DOWNLOAD DOCX ----------------
 @app.get("/api/v1/resume/download/{file_id}")
 async def download_resume(file_id: str):
     file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.docx")
@@ -167,7 +180,32 @@ async def download_resume(file_id: str):
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
-# ---------------- RENDER ENTRYPOINT ----------------
+
+# ---------------- DOWNLOAD PDF ----------------
+@app.get("/api/v1/resume/download/pdf/{file_id}")
+async def download_pdf(file_id: str):
+    file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.pdf")
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        path=file_path,
+        filename="VectorAlign_Optimized_Resume.pdf",
+        media_type="application/pdf"
+    )
+
+
+# ---------------- HEALTH CHECK ----------------
+@app.get("/")
+def home():
+    return {
+        "message": "VectorAlign AI Backend Running (UPGRADED VERSION)",
+        "version": "3.0.0"
+    }
+
+
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
