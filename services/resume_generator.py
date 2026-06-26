@@ -4,6 +4,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 
+# ---------------- PDF CREATION ----------------
 def create_pdf(lines, path):
     c = canvas.Canvas(path, pagesize=letter)
     width, height = letter
@@ -13,40 +14,85 @@ def create_pdf(lines, path):
         if y < 40:
             c.showPage()
             y = height - 40
-        c.drawString(40, y, line[:120])
+
+        # Clean long lines (avoid overflow)
+        safe_line = str(line).encode("utf-8", "ignore").decode("utf-8")
+        c.drawString(40, y, safe_line[:120])
         y -= 15
 
     c.save()
 
 
+# ---------------- SAFE FORMATTER ----------------
+def clean_resume_text(text):
+    """
+    Ensures AI output is properly structured and readable
+    """
+    if not text:
+        return ""
+
+    # Normalize spacing
+    text = text.replace("\r", "")
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+
+    formatted_lines = []
+    for line in lines:
+        # Add bullet formatting if missing structure
+        if any(keyword in line.lower() for keyword in ["skills", "projects", "education", "experience"]):
+            formatted_lines.append("\n" + line.upper())
+        else:
+            formatted_lines.append(line)
+
+    return "\n".join(formatted_lines)
+
+
+# ---------------- MAIN GENERATOR ----------------
 def create_optimized_resume(optimized_content, feedback, file_id):
 
     os.makedirs("generated", exist_ok=True)
+
+    # FIX: Ensure resume is properly structured
+    optimized_resume = feedback.get("optimized_resume", "")
+
+    # fallback safety
+    if not optimized_resume:
+        optimized_resume = feedback.get("tailored_summary_suggestion", "")
+
+    optimized_resume = clean_resume_text(optimized_resume)
 
     # ---------------- DOCX ----------------
     doc = Document()
     doc.add_heading("AI Resume Optimization Report", 0)
 
-    doc.add_heading("ATS Summary", level=1)
-    doc.add_paragraph(feedback.get("ats_score_evaluation", ""))
+    doc.add_heading("ATS Score Analysis", level=1)
+    doc.add_paragraph(feedback.get("ats_score_evaluation", "N/A"))
 
-    doc.add_heading("Professional Summary", level=1)
-    doc.add_paragraph(feedback.get("tailored_summary_suggestion", ""))
+    doc.add_heading("PROFESSIONAL OPTIMIZED RESUME", level=1)
+    doc.add_paragraph(optimized_resume)
 
     doc.add_heading("Missing Keywords", level=1)
-    for k in feedback.get("missing_keywords", []):
-        doc.add_paragraph(f"• {k}")
+    missing = feedback.get("missing_keywords", [])
+    if missing:
+        for k in missing:
+            doc.add_paragraph(f"• {k}")
+    else:
+        doc.add_paragraph("No missing keywords detected.")
 
-    doc.add_heading("Improvement Areas", level=1)
-    for i in feedback.get("structural_feedback", []):
-        doc.add_paragraph(f"• {i}")
+    doc.add_heading("Structural Feedback", level=1)
+    structural = feedback.get("structural_feedback", [])
+    if structural:
+        for i in structural:
+            doc.add_paragraph(f"• {i}")
+    else:
+        doc.add_paragraph("Resume structure is strong.")
 
     doc.add_heading("Impact Improvements", level=1)
-    for i in feedback.get("quantifiable_impact_suggestions", []):
-        doc.add_paragraph(f"• {i}")
-
-    doc.add_heading("FULL OPTIMIZED RESUME", level=1)
-    doc.add_paragraph(feedback.get("optimized_resume", ""))
+    impact = feedback.get("quantifiable_impact_suggestions", [])
+    if impact:
+        for i in impact:
+            doc.add_paragraph(f"• {i}")
+    else:
+        doc.add_paragraph("No improvements required.")
 
     docx_path = f"generated/optimized_{file_id}.docx"
     doc.save(docx_path)
@@ -55,31 +101,30 @@ def create_optimized_resume(optimized_content, feedback, file_id):
     pdf_lines = [
         "AI RESUME OPTIMIZATION REPORT",
         "",
-        "ATS SUMMARY",
-        feedback.get("ats_score_evaluation", ""),
+        "ATS SCORE ANALYSIS",
+        feedback.get("ats_score_evaluation", "N/A"),
         "",
-        "SUMMARY",
-        feedback.get("tailored_summary_suggestion", ""),
+        "OPTIMIZED RESUME",
+        optimized_resume,
         "",
-        "SKILLS GAP",
+        "MISSING KEYWORDS",
         *feedback.get("missing_keywords", []),
         "",
-        "IMPROVEMENTS",
+        "STRUCTURAL FEEDBACK",
         *feedback.get("structural_feedback", []),
         "",
-        "IMPACT",
+        "IMPACT IMPROVEMENTS",
         *feedback.get("quantifiable_impact_suggestions", []),
-        "",
-        "FULL RESUME",
-        feedback.get("optimized_resume", "")
     ]
 
     pdf_path = f"generated/optimized_{file_id}.pdf"
     create_pdf(pdf_lines, pdf_path)
 
+    # ---------------- RESPONSE ----------------
     return {
         "docx_path": docx_path,
         "pdf_path": pdf_path,
+        "optimized_resume": optimized_resume,
         "keyword_match_score": feedback.get("keyword_match_score", 0),
         "job_match_score": feedback.get("job_match_score", 0)
     }
