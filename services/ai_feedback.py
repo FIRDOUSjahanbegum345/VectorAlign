@@ -1,91 +1,104 @@
 import os
 import json
-import re
-from dotenv import load_dotenv
-from google import genai
 
-load_dotenv()
+# 🔥 If you're using OpenAI
+from openai import OpenAI
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def clean_json(text: str):
-    if not text:
-        return None
+ATS_PROMPT = """
+You are an expert ATS resume writer and senior technical recruiter.
 
-    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-    text = text.strip()
+You MUST convert the input into a structured ATS-optimized resume.
 
-    try:
-        return json.loads(text)
-    except:
-        return None
+ABSOLUTE RULES:
+- DO NOT write paragraphs
+- DO NOT summarize
+- ONLY return valid JSON
+- MUST use bullet points (•)
+- MUST be recruiter-ready
+- MUST include ATS keywords from job description
+- MUST quantify achievements where possible
 
+OUTPUT FORMAT (STRICT JSON ONLY):
 
-def fallback(ats_score):
-    return {
-        "ats_score_evaluation": f"ATS Score: {ats_score}%. Needs optimization.",
-        "missing_keywords": ["Python", "FastAPI", "SQL", "System Design"],
-        "structural_feedback": ["Improve formatting", "Add metrics", "Use ATS keywords"],
-        "quantifiable_impact_suggestions": ["Add measurable impact like % improvements"],
-        "tailored_summary_suggestion": "Full Stack Developer with backend and frontend experience.",
-        "optimized_resume": "Resume optimization unavailable - fallback used."
-    }
+{
+  "ats_score": 0-100,
+  "feedback": {
+    "ats_score_evaluation": "",
+    "missing_keywords": [],
+    "structural_feedback": [],
+    "quantifiable_impact_suggestions": [],
+    "tailored_summary_suggestion": ""
+  },
+  "optimized_resume": {
+    "professional_summary": [],
+    "technical_skills": [],
+    "work_experience": [],
+    "projects": [],
+    "education": []
+  }
+}
 
-
-def generate_feedback(resume_text: str, job_description: str, ats_score: float):
-
-    prompt = f"""
-You are an expert ATS Resume Engine.
-
-Return ONLY valid JSON.
-
-Schema:
-{{
-  "ats_score_evaluation": string,
-  "missing_keywords": [string],
-  "structural_feedback": [string],
-  "quantifiable_impact_suggestions": [string],
-  "tailored_summary_suggestion": string,
-  "optimized_resume": string,
-  "keyword_match_score": number,
-  "job_match_score": number
-}}
-
-RULES:
-- optimized_resume MUST be a full professional resume with sections:
-  Summary, Skills, Experience, Projects, Education
-- Make it ATS optimized
-- No markdown
-- No explanation
-
-ATS SCORE: {ats_score}
-
-RESUME:
+INPUT RESUME:
 {resume_text}
 
 JOB DESCRIPTION:
 {job_description}
+
+Return ONLY valid JSON. No extra text.
 """
 
-    models = [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-flash-latest",
-    ]
 
-    for model in models:
+def generate_ai_feedback(resume_text: str, job_description: str):
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # you can change model
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a strict ATS resume parser that outputs only JSON."
+                },
+                {
+                    "role": "user",
+                    "content": ATS_PROMPT.format(
+                        resume_text=resume_text,
+                        job_description=job_description
+                    )
+                }
+            ],
+            temperature=0.2
+        )
+
+        raw_output = response.choices[0].message.content
+
+        # 🧠 Convert to JSON safely
         try:
-            res = client.models.generate_content(
-                model=model,
-                contents=prompt
-            )
+            parsed_output = json.loads(raw_output)
+        except:
+            # fallback cleanup if model adds text
+            cleaned = raw_output.strip().replace("```json", "").replace("```", "")
+            parsed_output = json.loads(cleaned)
 
-            data = clean_json(res.text)
-            if data:
-                return data
+        return parsed_output
 
-        except Exception as e:
-            print("Gemini error:", e)
-
-    return fallback(ats_score)
+    except Exception as e:
+        return {
+            "ats_score": 0,
+            "feedback": {
+                "ats_score_evaluation": f"Error generating feedback: {str(e)}",
+                "missing_keywords": [],
+                "structural_feedback": [],
+                "quantifiable_impact_suggestions": [],
+                "tailored_summary_suggestion": ""
+            },
+            "optimized_resume": {
+                "professional_summary": [],
+                "technical_skills": [],
+                "work_experience": [],
+                "projects": [],
+                "education": []
+            }
+        }
