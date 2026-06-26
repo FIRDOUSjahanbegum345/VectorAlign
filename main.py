@@ -153,7 +153,7 @@ async def analyze_resume(
             "mean_vector_match": round(ats_score * 3, 2),
             "system_peak_match": round(ats_score * 4, 2),
             "feedback": feedback_matrix,
-            "download_url": f"/api/v1/resume/download/{file_id}",
+            "download_url": f"/resume/download/{file_id}",
 
             # NEW upgraded fields
             "download_docx": files["docx_path"],
