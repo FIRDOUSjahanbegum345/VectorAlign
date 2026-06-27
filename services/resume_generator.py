@@ -1,13 +1,14 @@
 import os
-import subprocess
 from docx import Document
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
 
 # =========================
 # CONFIG
 # =========================
 GENERATED_DIR = "generated"
 os.makedirs(GENERATED_DIR, exist_ok=True)
-
 
 # =========================
 # TEXT CLEANER
@@ -35,6 +36,58 @@ def clean_resume_text(text):
 
     return "\n".join(formatted_lines)
 
+# =========================
+# PDF BUILDER
+# =========================
+def build_pdf(pdf_path, optimized_resume, feedback):
+    doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Title
+    story.append(Paragraph("AI Resume Optimization Report", styles['Title']))
+    story.append(Spacer(1, 12))
+
+    # ATS Score Analysis
+    story.append(Paragraph("ATS Score Analysis", styles['Heading2']))
+    story.append(Paragraph(feedback.get("ats_score_evaluation", "N/A"), styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # Optimized Resume
+    story.append(Paragraph("Professional Optimized Resume", styles['Heading2']))
+    story.append(Paragraph(optimized_resume, styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # Missing Keywords
+    story.append(Paragraph("Missing Keywords", styles['Heading2']))
+    missing = feedback.get("missing_keywords", [])
+    if missing:
+        items = [ListItem(Paragraph(k, styles['Normal'])) for k in missing]
+        story.append(ListFlowable(items, bulletType='bullet'))
+    else:
+        story.append(Paragraph("No missing keywords detected.", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # Structural Feedback
+    story.append(Paragraph("Structural Feedback", styles['Heading2']))
+    structural = feedback.get("structural_feedback", [])
+    if structural:
+        items = [ListItem(Paragraph(i, styles['Normal'])) for i in structural]
+        story.append(ListFlowable(items, bulletType='bullet'))
+    else:
+        story.append(Paragraph("Resume structure is strong.", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # Impact Suggestions
+    story.append(Paragraph("Impact Improvements", styles['Heading2']))
+    impact = feedback.get("quantifiable_impact_suggestions", [])
+    if impact:
+        items = [ListItem(Paragraph(i, styles['Normal'])) for i in impact]
+        story.append(ListFlowable(items, bulletType='bullet'))
+    else:
+        story.append(Paragraph("No improvements required.", styles['Normal']))
+
+    doc.build(story)
 
 # =========================
 # MAIN GENERATOR
@@ -89,11 +142,10 @@ def create_optimized_resume(optimized_content, feedback, file_id):
 
     doc.save(docx_path)
 
-    # ---------------- PDF (convert DOCX → PDF using pandoc) ----------------
+    # ---------------- PDF (generate directly with ReportLab) ----------------
     try:
-        subprocess.run(["pandoc", docx_path, "-o", pdf_path], check=True)
-    except Exception:
-        # fallback: write plain text if conversion fails
+        build_pdf(pdf_path, optimized_resume, feedback)
+    except Exception as e:
         with open(pdf_path, "w", encoding="utf-8") as f:
             f.write(optimized_resume)
 
