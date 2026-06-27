@@ -117,7 +117,7 @@ async def analyze_resume(
             "mean_vector_match": round(ats_score * 3, 2),
             "system_peak_match": round(ats_score * 4, 2),
             "feedback": feedback_matrix,
-            # ✅ Clean download paths
+            # ✅ Clean download paths served via /generated
             "download_docx": f"/generated/optimized_{file_id}.docx",
             "download_pdf": f"/generated/optimized_{file_id}.pdf",
             "keyword_match_score": feedback_matrix.get("keyword_match_score", 0),
