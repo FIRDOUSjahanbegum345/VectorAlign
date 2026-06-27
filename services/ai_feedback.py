@@ -17,10 +17,6 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 # ===========================
 
 def extract_resume_text(file_path, file_extension):
-    """
-    Extract text from uploaded resume.
-    Supports PDF, DOCX and TXT.
-    """
     file_extension = file_extension.lower()
 
     if file_extension == "pdf":
@@ -34,10 +30,6 @@ def extract_resume_text(file_path, file_extension):
 
 
 def extract_text_from_pdf(file_path):
-    """
-    Extract text using pdfplumber.
-    Falls back to pypdf if pdfplumber fails.
-    """
     text = ""
     try:
         with pdfplumber.open(file_path) as pdf:
@@ -59,9 +51,6 @@ def extract_text_from_pdf(file_path):
 
 
 def extract_text_from_docx(file_path):
-    """
-    Extract text from DOCX.
-    """
     document = docx.Document(file_path)
     text = []
     for para in document.paragraphs:
@@ -71,9 +60,6 @@ def extract_text_from_docx(file_path):
 
 
 def extract_text_from_txt(file_path):
-    """
-    Extract text from TXT.
-    """
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
@@ -82,10 +68,6 @@ def extract_text_from_txt(file_path):
 # ===========================
 
 def extract_json(text):
-    """
-    Gemini sometimes wraps JSON inside ```json blocks.
-    Remove them and parse safely.
-    """
     if not text:
         return None
 
@@ -105,11 +87,13 @@ def extract_json(text):
 # ===========================
 
 def fallback(ats_score):
-    """
-    Default response if Gemini fails.
-    """
     return {
         "ats_score_evaluation": f"ATS Score: {ats_score}/100. Resume requires further optimization.",
+        "weaknesses": [
+            "Resume lacks measurable achievements",
+            "Weak keyword alignment with job description",
+            "Formatting may not be ATS-friendly"
+        ],
         "missing_keywords": [],
         "structural_feedback": [
             "Improve formatting",
@@ -187,6 +171,7 @@ The JSON MUST follow this EXACT schema:
 
 {{
     "ats_score_evaluation":"",
+    "weaknesses":[],
     "missing_keywords":[],
     "structural_feedback":[],
     "quantifiable_impact_suggestions":[],
@@ -207,35 +192,6 @@ STRICT RULES:
 8. Naturally include missing keywords.
 9. Improve grammar, formatting and readability.
 10. Use professional recruiter language.
-
-optimized_resume MUST contain these sections:
-
-PROFESSIONAL SUMMARY
-• 4-6 bullet points
-
-TECHNICAL SKILLS
-• Bullet list
-
-WORK EXPERIENCE
-• Bullet points
-• Strong action verbs
-• Quantifiable achievements wherever possible
-
-PROJECTS
-• Mention technologies used
-• Mention business impact
-• Bullet points
-
-EDUCATION
-
-CERTIFICATIONS
-• If unavailable generate suitable placeholders.
-
-CORE STRENGTHS
-• Bullet points
-
-ATS KEYWORDS
-• Important keywords from the Job Description.
 
 ATS SCORE:
 {ats_score}
@@ -279,6 +235,8 @@ JOB DESCRIPTION:
                     data["optimized_resume"] = ""
                 if "ats_score_evaluation" not in data:
                     data["ats_score_evaluation"] = f"ATS Score: {ats_score}/100."
+                if "weaknesses" not in data:   # NEW fallback
+                    data["weaknesses"] = []
 
                 return data
 
