@@ -1,35 +1,12 @@
 import os
+import subprocess
 from docx import Document
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-
 
 # =========================
 # CONFIG
 # =========================
 GENERATED_DIR = "generated"
 os.makedirs(GENERATED_DIR, exist_ok=True)
-
-
-# =========================
-# PDF CREATION
-# =========================
-def create_pdf(lines, path):
-    c = canvas.Canvas(path, pagesize=letter)
-    width, height = letter
-    y = height - 40
-
-    for line in lines:
-        if y < 40:
-            c.showPage()
-            y = height - 40
-
-        # Clean encoding issues + prevent overflow
-        safe_line = str(line).encode("utf-8", "ignore").decode("utf-8")
-        c.drawString(40, y, safe_line[:120])
-        y -= 15
-
-    c.save()
 
 
 # =========================
@@ -63,10 +40,8 @@ def clean_resume_text(text):
 # MAIN GENERATOR
 # =========================
 def create_optimized_resume(optimized_content, feedback, file_id):
-
     # ---------------- GET RESUME ----------------
     optimized_resume = feedback.get("optimized_resume", "")
-
     if not optimized_resume:
         optimized_resume = feedback.get("tailored_summary_suggestion", "")
 
@@ -79,7 +54,7 @@ def create_optimized_resume(optimized_content, feedback, file_id):
     doc.add_heading("ATS Score Analysis", level=1)
     doc.add_paragraph(feedback.get("ats_score_evaluation", "N/A"))
 
-    doc.add_heading("PROFESSIONAL OPTIMIZED RESUME", level=1)
+    doc.add_heading("Professional Optimized Resume", level=1)
     doc.add_paragraph(optimized_resume)
 
     # Missing Keywords
@@ -110,35 +85,22 @@ def create_optimized_resume(optimized_content, feedback, file_id):
         doc.add_paragraph("No improvements required.")
 
     docx_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.docx")
+    pdf_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.pdf")
+
     doc.save(docx_path)
 
-    # ---------------- PDF ----------------
-    pdf_lines = [
-        "AI RESUME OPTIMIZATION REPORT",
-        "",
-        "ATS SCORE ANALYSIS",
-        feedback.get("ats_score_evaluation", "N/A"),
-        "",
-        "OPTIMIZED RESUME",
-        optimized_resume,
-        "",
-        "MISSING KEYWORDS",
-        *feedback.get("missing_keywords", []),
-        "",
-        "STRUCTURAL FEEDBACK",
-        *feedback.get("structural_feedback", []),
-        "",
-        "IMPACT IMPROVEMENTS",
-        *feedback.get("quantifiable_impact_suggestions", []),
-    ]
-
-    pdf_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.pdf")
-    create_pdf(pdf_lines, pdf_path)
+    # ---------------- PDF (convert DOCX → PDF using pandoc) ----------------
+    try:
+        subprocess.run(["pandoc", docx_path, "-o", pdf_path], check=True)
+    except Exception:
+        # fallback: write plain text if conversion fails
+        with open(pdf_path, "w", encoding="utf-8") as f:
+            f.write(optimized_resume)
 
     # ---------------- RESPONSE ----------------
     return {
-        "docx_path": docx_path,
-        "pdf_path": pdf_path,
+        "docx_path": f"/generated/optimized_{file_id}.docx",
+        "pdf_path": f"/generated/optimized_{file_id}.pdf",
         "optimized_resume": optimized_resume,
         "keyword_match_score": feedback.get("keyword_match_score", 0),
         "job_match_score": feedback.get("job_match_score", 0)
