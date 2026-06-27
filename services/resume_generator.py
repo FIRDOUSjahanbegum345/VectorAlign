@@ -62,7 +62,7 @@ def build_pdf(pdf_path, optimized_resume, feedback):
     story.append(Paragraph("Missing Keywords", styles['Heading2']))
     missing = feedback.get("missing_keywords", [])
     if missing:
-        items = [ListItem(Paragraph(k, styles['Normal'])) for k in missing]
+        items = [ListItem(Paragraph(f"• {k}", styles['Normal'])) for k in missing]
         story.append(ListFlowable(items, bulletType='bullet'))
     else:
         story.append(Paragraph("No missing keywords detected.", styles['Normal']))
@@ -72,7 +72,7 @@ def build_pdf(pdf_path, optimized_resume, feedback):
     story.append(Paragraph("Structural Feedback", styles['Heading2']))
     structural = feedback.get("structural_feedback", [])
     if structural:
-        items = [ListItem(Paragraph(i, styles['Normal'])) for i in structural]
+        items = [ListItem(Paragraph(f"• {i}", styles['Normal'])) for i in structural]
         story.append(ListFlowable(items, bulletType='bullet'))
     else:
         story.append(Paragraph("Resume structure is strong.", styles['Normal']))
@@ -82,7 +82,7 @@ def build_pdf(pdf_path, optimized_resume, feedback):
     story.append(Paragraph("Impact Improvements", styles['Heading2']))
     impact = feedback.get("quantifiable_impact_suggestions", [])
     if impact:
-        items = [ListItem(Paragraph(i, styles['Normal'])) for i in impact]
+        items = [ListItem(Paragraph(f"• {i}", styles['Normal'])) for i in impact]
         story.append(ListFlowable(items, bulletType='bullet'))
     else:
         story.append(Paragraph("No improvements required.", styles['Normal']))
@@ -142,7 +142,7 @@ def create_optimized_resume(optimized_content, feedback, file_id):
 
     doc.save(docx_path)
 
-    # ---------------- PDF (generate directly with ReportLab) ----------------
+    # ---------------- PDF (structured with ReportLab) ----------------
     try:
         build_pdf(pdf_path, optimized_resume, feedback)
     except Exception as e:
