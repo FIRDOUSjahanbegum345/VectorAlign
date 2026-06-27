@@ -1,4 +1,5 @@
 import os
+import re
 from docx import Document
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -37,6 +38,17 @@ def clean_resume_text(text):
     return "\n".join(formatted_lines)
 
 # =========================
+# SECTION EXTRACTOR
+# =========================
+def extract_section(text, marker):
+    """Extract section content after a marker heading"""
+    pattern = rf"{marker}(.*?)(?=\n[A-Z ]+:|$)"  # capture until next heading or end
+    match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return None
+
+# =========================
 # PDF BUILDER
 # =========================
 def build_pdf(pdf_path, optimized_resume, feedback):
@@ -54,25 +66,28 @@ def build_pdf(pdf_path, optimized_resume, feedback):
     story.append(Spacer(1, 12))
 
     # Optimized Resume Sections
-    sections = [
-        ("Professional Summary", feedback.get("tailored_summary_suggestion", "")),
-        ("Technical Skills", feedback.get("technical_skills", [])),
-        ("Experience", feedback.get("experience", [])),
-        ("Projects", feedback.get("projects", [])),
-        ("Education", feedback.get("education", [])),
-        ("Certifications", feedback.get("certifications", [])),
-    ]
+    sections = {
+        "Professional Summary": "PROFESSIONAL SUMMARY",
+        "Technical Skills": "TECHNICAL SKILLS",
+        "Experience": "WORK EXPERIENCE",
+        "Projects": "PROJECTS",
+        "Education": "EDUCATION",
+        "Certifications": "CERTIFICATIONS",
+    }
 
-    for title, content in sections:
+    for title, marker in sections.items():
         story.append(Paragraph(title, styles['Heading2']))
-        if isinstance(content, list):
-            if content:
-                items = [ListItem(Paragraph(f"{c}", styles['Normal'])) for c in content]
+        content = extract_section(optimized_resume, marker)
+        if content:
+            # If section has bullet points, split them
+            if "•" in content:
+                items = [ListItem(Paragraph(line.strip("• "), styles['Normal']))
+                         for line in content.split("\n") if line.strip()]
                 story.append(ListFlowable(items, bulletType='bullet'))
             else:
-                story.append(Paragraph("No details provided.", styles['Normal']))
+                story.append(Paragraph(content, styles['Normal']))
         else:
-            story.append(Paragraph(content if content else "No details provided.", styles['Normal']))
+            story.append(Paragraph("No details provided.", styles['Normal']))
         story.append(Spacer(1, 12))
 
     # Missing Keywords
