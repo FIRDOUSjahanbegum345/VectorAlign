@@ -51,7 +51,7 @@ def get_db():
         db.close()
 
 # ---------------- SIGNUP ----------------
-@app.post("/auth/signup")
+@app.post("/api/v1/auth/signup")
 async def signup(user: UserAuth, db: Session = Depends(get_db)):
     hashed_pw = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
     new_user = User(username=user.username, password=hashed_pw)
@@ -64,7 +64,7 @@ async def signup(user: UserAuth, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Username already exists")
 
 # ---------------- LOGIN ----------------
-@app.post("/auth/login")
+@app.post("/api/v1/auth/login")
 async def login(user: UserAuth, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.username == user.username).first()
     if not db_user or not bcrypt.checkpw(user.password.encode(), db_user.password.encode()):
@@ -72,7 +72,7 @@ async def login(user: UserAuth, db: Session = Depends(get_db)):
     return {"status": "success", "username": db_user.username}
 
 # ---------------- RESUME ANALYZE ----------------
-@app.post("/resume/analyze")
+@app.post("/api/v1/resume/analyze")
 async def analyze_resume(
     resume: UploadFile = File(...),
     job_description: str = Form(...),
@@ -90,26 +90,22 @@ async def analyze_resume(
         f.write(await resume.read())
 
     try:
-        # ---------------- PIPELINE ----------------
         resume_text = extract_resume_text(file_path, extension)
         ats_score = calculate_ats_score(resume_text, job_description)
         feedback_matrix = generate_feedback(resume_text, job_description, ats_score)
 
-        # ---------------- GENERATE DOCX + PDF ----------------
         files = create_optimized_resume(
             optimized_content=feedback_matrix.get("optimized_resume", ""),
             feedback=feedback_matrix,
             file_id=file_id
         )
 
-        # ---------------- DB SAVE ----------------
         new_scan = Scan(user_id=user_id, ats_score=ats_score)
         db.add(new_scan)
         db.commit()
 
         total_scans = db.query(Scan).filter(Scan.user_id == user_id).count()
 
-        # ---------------- RESPONSE ----------------
         return {
             "file_id": file_id,
             "ats_score": ats_score,
@@ -117,7 +113,7 @@ async def analyze_resume(
             "mean_vector_match": round(ats_score * 3, 2),
             "system_peak_match": round(ats_score * 4, 2),
             "feedback": feedback_matrix,
-            "download_url": f"/resume/download/{file_id}",
+            "download_url": f"/api/v1/resume/download/{file_id}",
             "download_docx": files["docx_path"],
             "download_pdf": files["pdf_path"],
             "keyword_match_score": feedback_matrix.get("keyword_match_score", 0),
@@ -129,19 +125,19 @@ async def analyze_resume(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ---------------- TOTAL SCANS (GLOBAL) ----------------
-@app.get("/scans/total")
+@app.get("/api/v1/scans/total")
 async def get_total_scans(db: Session = Depends(get_db)):
     total = db.query(Scan).count()
     return {"total": total}
 
 # ---------------- TOTAL SCANS (PER USER) ----------------
-@app.get("/scans/total/{user_id}")
+@app.get("/api/v1/scans/total/{user_id}")
 async def get_user_total_scans(user_id: str, db: Session = Depends(get_db)):
     total = db.query(Scan).filter(Scan.user_id == user_id).count()
     return {"user_id": user_id, "total": total}
 
 # ---------------- DOWNLOAD DOCX ----------------
-@app.get("/resume/download/{file_id}")
+@app.get("/api/v1/resume/download/{file_id}")
 async def download_resume(file_id: str):
     file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.docx")
     if not os.path.exists(file_path):
@@ -153,7 +149,7 @@ async def download_resume(file_id: str):
     )
 
 # ---------------- DOWNLOAD PDF ----------------
-@app.get("/resume/download/pdf/{file_id}")
+@app.get("/api/v1/resume/download/pdf/{file_id}")
 async def download_pdf(file_id: str):
     file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.pdf")
     if not os.path.exists(file_path):
@@ -165,7 +161,7 @@ async def download_pdf(file_id: str):
     )
 
 # ---------------- HEALTH CHECK ----------------
-@app.get("/")
+@app.get("/api/v1/")
 def home():
     return {
         "message": "VectorAlign AI Backend Running (SQLAlchemy version)",
