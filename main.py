@@ -5,6 +5,7 @@ import bcrypt
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -36,6 +37,9 @@ GENERATED_DIR = "generated"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(GENERATED_DIR, exist_ok=True)
+
+# ✅ Mount static files so /generated/* can be downloaded
+app.mount("/generated", StaticFiles(directory=GENERATED_DIR), name="generated")
 
 # ---------------- AUTH MODEL ----------------
 class UserAuth(BaseModel):
@@ -113,9 +117,9 @@ async def analyze_resume(
             "mean_vector_match": round(ats_score * 3, 2),
             "system_peak_match": round(ats_score * 4, 2),
             "feedback": feedback_matrix,
-            "download_url": f"/api/v1/resume/download/{file_id}",
-            "download_docx": files["docx_path"],
-            "download_pdf": files["pdf_path"],
+            # ✅ Clean download paths
+            "download_docx": f"/generated/optimized_{file_id}.docx",
+            "download_pdf": f"/generated/optimized_{file_id}.pdf",
             "keyword_match_score": feedback_matrix.get("keyword_match_score", 0),
             "job_match_score": feedback_matrix.get("job_match_score", 0)
         }
@@ -135,30 +139,6 @@ async def get_total_scans(db: Session = Depends(get_db)):
 async def get_user_total_scans(user_id: str, db: Session = Depends(get_db)):
     total = db.query(Scan).filter(Scan.user_id == user_id).count()
     return {"user_id": user_id, "total": total}
-
-# ---------------- DOWNLOAD DOCX ----------------
-@app.get("/api/v1/resume/download/{file_id}")
-async def download_resume(file_id: str):
-    file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.docx")
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(
-        path=file_path,
-        filename="VectorAlign_Optimized_Resume.docx",
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
-
-# ---------------- DOWNLOAD PDF ----------------
-@app.get("/api/v1/resume/download/pdf/{file_id}")
-async def download_pdf(file_id: str):
-    file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.pdf")
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(
-        path=file_path,
-        filename="VectorAlign_Optimized_Resume.pdf",
-        media_type="application/pdf"
-    )
 
 # ---------------- HEALTH CHECK ----------------
 @app.get("/api/v1/")
