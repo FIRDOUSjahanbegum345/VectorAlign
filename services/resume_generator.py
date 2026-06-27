@@ -4,7 +4,16 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 
-# ---------------- PDF CREATION ----------------
+# =========================
+# CONFIG
+# =========================
+GENERATED_DIR = "generated"
+os.makedirs(GENERATED_DIR, exist_ok=True)
+
+
+# =========================
+# PDF CREATION
+# =========================
 def create_pdf(lines, path):
     c = canvas.Canvas(path, pagesize=letter)
     width, height = letter
@@ -15,7 +24,7 @@ def create_pdf(lines, path):
             c.showPage()
             y = height - 40
 
-        # Clean long lines (avoid overflow)
+        # Clean encoding issues + prevent overflow
         safe_line = str(line).encode("utf-8", "ignore").decode("utf-8")
         c.drawString(40, y, safe_line[:120])
         y -= 15
@@ -23,22 +32,26 @@ def create_pdf(lines, path):
     c.save()
 
 
-# ---------------- SAFE FORMATTER ----------------
+# =========================
+# TEXT CLEANER
+# =========================
 def clean_resume_text(text):
     """
-    Ensures AI output is properly structured and readable
+    Formats AI-generated resume text for readability
     """
     if not text:
         return ""
 
-    # Normalize spacing
     text = text.replace("\r", "")
     lines = [line.strip() for line in text.split("\n") if line.strip()]
 
     formatted_lines = []
+
     for line in lines:
-        # Add bullet formatting if missing structure
-        if any(keyword in line.lower() for keyword in ["skills", "projects", "education", "experience"]):
+        if any(keyword in line.lower() for keyword in [
+            "skills", "projects", "education", "experience",
+            "certifications", "summary", "work"
+        ]):
             formatted_lines.append("\n" + line.upper())
         else:
             formatted_lines.append(line)
@@ -46,15 +59,14 @@ def clean_resume_text(text):
     return "\n".join(formatted_lines)
 
 
-# ---------------- MAIN GENERATOR ----------------
+# =========================
+# MAIN GENERATOR
+# =========================
 def create_optimized_resume(optimized_content, feedback, file_id):
 
-    os.makedirs("generated", exist_ok=True)
-
-    # FIX: Ensure resume is properly structured
+    # ---------------- GET RESUME ----------------
     optimized_resume = feedback.get("optimized_resume", "")
 
-    # fallback safety
     if not optimized_resume:
         optimized_resume = feedback.get("tailored_summary_suggestion", "")
 
@@ -70,6 +82,7 @@ def create_optimized_resume(optimized_content, feedback, file_id):
     doc.add_heading("PROFESSIONAL OPTIMIZED RESUME", level=1)
     doc.add_paragraph(optimized_resume)
 
+    # Missing Keywords
     doc.add_heading("Missing Keywords", level=1)
     missing = feedback.get("missing_keywords", [])
     if missing:
@@ -78,6 +91,7 @@ def create_optimized_resume(optimized_content, feedback, file_id):
     else:
         doc.add_paragraph("No missing keywords detected.")
 
+    # Structural Feedback
     doc.add_heading("Structural Feedback", level=1)
     structural = feedback.get("structural_feedback", [])
     if structural:
@@ -86,6 +100,7 @@ def create_optimized_resume(optimized_content, feedback, file_id):
     else:
         doc.add_paragraph("Resume structure is strong.")
 
+    # Impact Suggestions
     doc.add_heading("Impact Improvements", level=1)
     impact = feedback.get("quantifiable_impact_suggestions", [])
     if impact:
@@ -94,7 +109,7 @@ def create_optimized_resume(optimized_content, feedback, file_id):
     else:
         doc.add_paragraph("No improvements required.")
 
-    docx_path = f"generated/optimized_{file_id}.docx"
+    docx_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.docx")
     doc.save(docx_path)
 
     # ---------------- PDF ----------------
@@ -117,7 +132,7 @@ def create_optimized_resume(optimized_content, feedback, file_id):
         *feedback.get("quantifiable_impact_suggestions", []),
     ]
 
-    pdf_path = f"generated/optimized_{file_id}.pdf"
+    pdf_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.pdf")
     create_pdf(pdf_lines, pdf_path)
 
     # ---------------- RESPONSE ----------------
