@@ -53,10 +53,27 @@ def build_pdf(pdf_path, optimized_resume, feedback):
     story.append(Paragraph(feedback.get("ats_score_evaluation", "N/A"), styles['Normal']))
     story.append(Spacer(1, 12))
 
-    # Optimized Resume
-    story.append(Paragraph("Professional Optimized Resume", styles['Heading2']))
-    story.append(Paragraph(optimized_resume, styles['Normal']))
-    story.append(Spacer(1, 12))
+    # Optimized Resume Sections
+    sections = [
+        ("Professional Summary", feedback.get("tailored_summary_suggestion", "")),
+        ("Technical Skills", feedback.get("technical_skills", [])),
+        ("Experience", feedback.get("experience", [])),
+        ("Projects", feedback.get("projects", [])),
+        ("Education", feedback.get("education", [])),
+        ("Certifications", feedback.get("certifications", [])),
+    ]
+
+    for title, content in sections:
+        story.append(Paragraph(title, styles['Heading2']))
+        if isinstance(content, list):
+            if content:
+                items = [ListItem(Paragraph(f"{c}", styles['Normal'])) for c in content]
+                story.append(ListFlowable(items, bulletType='bullet'))
+            else:
+                story.append(Paragraph("No details provided.", styles['Normal']))
+        else:
+            story.append(Paragraph(content if content else "No details provided.", styles['Normal']))
+        story.append(Spacer(1, 12))
 
     # Missing Keywords
     story.append(Paragraph("Missing Keywords", styles['Heading2']))
