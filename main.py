@@ -45,7 +45,7 @@ class UserAuth(BaseModel):
 
 
 # ---------------- SIGNUP ----------------
-@app.post("/api/v1/auth/signup")
+@app.post("/auth/signup")
 async def signup(user: UserAuth):
     hashed_pw = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
 
@@ -65,7 +65,7 @@ async def signup(user: UserAuth):
 
 
 # ---------------- LOGIN ----------------
-@app.post("/api/v1/auth/login")
+@app.post("/auth/login")
 async def login(user: UserAuth):
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
@@ -81,8 +81,8 @@ async def login(user: UserAuth):
     return {"status": "success", "username": user.username}
 
 
-# ---------------- RESUME ANALYZE (UPGRADED CORE) ----------------
-@app.post("/api/v1/resume/analyze")
+# ---------------- RESUME ANALYZE ----------------
+@app.post("/resume/analyze")
 async def analyze_resume(
     resume: UploadFile = File(...),
     job_description: str = Form(...),
@@ -102,7 +102,6 @@ async def analyze_resume(
     try:
         # ---------------- PIPELINE ----------------
         resume_text = extract_resume_text(file_path, extension)
-
         ats_score = calculate_ats_score(resume_text, job_description)
 
         feedback_matrix = generate_feedback(
@@ -143,19 +142,15 @@ async def analyze_resume(
 
             conn.commit()
 
-        # ---------------- RESPONSE (BACKWARD SAFE + UPGRADED) ----------------
+        # ---------------- RESPONSE ----------------
         return {
             "file_id": file_id,
-
-            # old frontend fields (DO NOT REMOVE)
             "ats_score": ats_score,
             "total_scans": total_scans,
             "mean_vector_match": round(ats_score * 3, 2),
             "system_peak_match": round(ats_score * 4, 2),
             "feedback": feedback_matrix,
             "download_url": f"/resume/download/{file_id}",
-
-            # NEW upgraded fields
             "download_docx": files["docx_path"],
             "download_pdf": files["pdf_path"],
             "keyword_match_score": feedback_matrix.get("keyword_match_score", 0),
@@ -166,8 +161,34 @@ async def analyze_resume(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------- TOTAL SCANS (GLOBAL) ----------------
+@app.get("/scans/total")
+async def get_total_scans():
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM scans")
+            total = cursor.fetchone()[0]
+        return {"total": total}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------- TOTAL SCANS (PER USER) ----------------
+@app.get("/scans/total/{user_id}")
+async def get_user_total_scans(user_id: str):
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM scans WHERE user_id = ?", (user_id,))
+            total = cursor.fetchone()[0]
+        return {"user_id": user_id, "total": total}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ---------------- DOWNLOAD DOCX ----------------
-@app.get("/api/v1/resume/download/{file_id}")
+@app.get("/resume/download/{file_id}")
 async def download_resume(file_id: str):
     file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.docx")
 
@@ -182,7 +203,7 @@ async def download_resume(file_id: str):
 
 
 # ---------------- DOWNLOAD PDF ----------------
-@app.get("/api/v1/resume/download/pdf/{file_id}")
+@app.get("/resume/download/pdf/{file_id}")
 async def download_pdf(file_id: str):
     file_path = os.path.join(GENERATED_DIR, f"optimized_{file_id}.pdf")
 
